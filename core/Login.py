@@ -2,6 +2,7 @@ import tkinter as tk
 from tkinter import PhotoImage
 from PIL import Image, ImageTk
 from Admin import Admin
+from DatabaseConnection import connect_db
 
 class Login(tk.Toplevel):
     def __init__(self, parent):
@@ -86,9 +87,46 @@ class Login(tk.Toplevel):
             self.password_entry.config(show="*")  # Hide text
 
     def login(self):
-        """ Open Admin window and close Login """
-        Admin(self.master) 
-        self.destroy()
+        username = self.username_entry.get()
+        password = self.password_entry.get()
+        
+        # Validate username and password against the admin table
+        if self.authenticate_user(username, password):
+            # If authentication is successful, open Admin window
+            Admin(self.master)
+            self.destroy()
+        else:
+            # If authentication fails, show an error message
+            self.show_error_message()
+
+    def authenticate_user(self, username, password):
+        # Connect to the database
+        connection = connect_db()
+        if connection is None:
+            return False  # If connection fails, return False
+        
+        cursor = connection.cursor()
+        
+        # Query to fetch the admin record based on the username
+        query = "SELECT * FROM admin WHERE username=%s AND password=%s"
+        cursor.execute(query, (username, password))
+        
+        # Fetch one record (if any)
+        result = cursor.fetchone()
+        
+        connection.close()  # Close the database connection
+        
+        # Return True if a match is found, False otherwise
+        return result is not None
+
+    def show_error_message(self):
+        error_window = tk.Toplevel(self)
+        error_window.title("Login Error")
+        error_window.geometry("300x150")
+        error_label = tk.Label(error_window, text="Invalid username or password", fg="red", font=("Segoe UI", 12))
+        error_label.pack(pady=30)
+        ok_button = tk.Button(error_window, text="OK", command=error_window.destroy)
+        ok_button.pack()
 
     def back(self):
         self.destroy()

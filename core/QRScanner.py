@@ -40,8 +40,15 @@ class QRScanner(tk.Toplevel):
         self.webCam_frame.place(relx=0.5, rely=0.5, width=640, height=480, anchor="center")
         """
         # Video Label (Webcam Display)
-        self.video_label = tk.Label(content_frame, bg="black")
+        self.video_label = tk.Label(content_frame, bg="#8B0000")
         self.video_label.place(relx=0.5, rely=0.5, width=640, height=480, anchor="center")
+
+        # CCJ
+        self.logo_image = Image.open("icons/ccj500.png") 
+        self.logo_image = self.logo_image.resize((500, 500), Image.LANCZOS)
+        self.logo_photo = ImageTk.PhotoImage(self.logo_image)
+        logo_label = tk.Label(self.video_label, image=self.logo_photo, bg="#8B0000")
+        logo_label.place(relx=0.5, rely=0.5, anchor="center")
 
         # Toggle Button
         self.toggle_btn = tk.Button(content_frame, text="Enable QR Scanner", font=("Segoe UI", 14, "bold"),
@@ -63,7 +70,9 @@ class QRScanner(tk.Toplevel):
     def open_home(self):
         self.destroy()
         self.master.deiconify()
-        self.cap.release()
+        if self.cap:  # Check if the webcam object exists
+            self.cap.release()  # Release the webcam
+            self.cap = None  # Set it to None to indicate it's no longer in use
 
     def resize_webcam(self, event):
         """ Adjust webcam frame size when window is resized """
@@ -78,18 +87,39 @@ class QRScanner(tk.Toplevel):
     def toggle_webcam(self):
         """ Toggle webcam on/off """
         if self.scanning:
+            # Stop scanning
             self.scanning = False
             self.toggle_btn.config(text="Enable QR Scanner")
             self.video_label.config(image="")  # Clear webcam display
+            
+            # Remove the logo if it's already displayed
+            if hasattr(self, 'logo_label'):
+                self.logo_label.place_forget()  # Remove the logo from the video label
+                del self.logo_label  # Delete the logo label to free up resources
+
+            # Recreate and show the logo again when stopping webcam
+            self.logo_label = tk.Label(self.video_label, image=self.logo_photo, bg="#8B0000")
+            self.logo_label.place(relx=0.5, rely=0.5, anchor="center")
+            
+            # Release the webcam if it's active
             if self.cap:
                 self.cap.release()
                 self.cap = None
         else:
+            # Start scanning
             self.scanning = True
             self.toggle_btn.config(text="Disable QR Scanner")
+            
+            # Remove the logo when starting webcam
+            if hasattr(self, 'logo_label'):
+                self.logo_label.place_forget()  # Remove the logo before starting the webcam
+                del self.logo_label  # Delete the logo label to free up resources
+
+            # Initialize webcam
             self.cap = cv2.VideoCapture(0)
             self.cap.set(cv2.CAP_PROP_FPS, 15)  # Limit FPS to reduce lag
-            self.scan_qr_code()
+            self.scan_qr_code()  # Start scanning QR codes
+
 
     def scan_qr_code(self):
         """ Capture frame, process QR codes, and update UI """
@@ -153,6 +183,7 @@ class QRScanner(tk.Toplevel):
         """ Handle window close (cleanup resources) """
         if self.cap:
             self.cap.release()  # Release the webcam when closing
+            self.cap = None
         self.destroy()  # Close the window
     
 
