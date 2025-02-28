@@ -4,6 +4,8 @@ import cv2
 import numpy as np
 from pyzbar.pyzbar import decode
 from PIL import Image, ImageTk
+from DatabaseConnection import connect_db
+from datetime import datetime
 
 class QRScanner(tk.Toplevel):
     def __init__(self, parent):
@@ -131,14 +133,18 @@ class QRScanner(tk.Toplevel):
                 # QR Code Detection
                 for barcode in decode(frame):
                     qr_data = barcode.data.decode('utf-8')
-                    messagebox.showinfo("QR Code Scanned", f"Scanned Successfully!\nData: {qr_data}")
+                  # messagebox.showinfo("QR Code Scanned", f"Scanned Successfully!\nData: {qr_data}")
                     
+
                     # Draw bounding box
                     pts = barcode.polygon
                     if len(pts) == 4:
                         pts = [(p.x, p.y) for p in pts]
                         cv2.polylines(frame, [np.array(pts, np.int32)], True, (0, 255, 0), 2)
-                
+
+                    sr_code = qr_data[9:17]
+                    self.process_attendance(sr_code, qr_data)
+                    
                 # Create the fading wind-like scanning effect
                 self.create_wind_like_scanning_bar(frame)
 
@@ -151,6 +157,42 @@ class QRScanner(tk.Toplevel):
 
                 # Schedule next frame update
                 self.after(10, self.scan_qr_code)  # Fast refresh rate
+                
+    def process_attendance(self, sr_code, qr_data):
+        db = connect_db()
+        cursor = db.cursor()
+        cursor.execute("SELECT studentID FROM students WHERE srCode = %s", (sr_code,))
+        result = cursor.fetchone()
+        
+        if result:
+            student_id = result[0]
+            today = datetime.now().date()
+            current_time = datetime.now().time()
+
+            # Select both attendanceID and checkOutTime
+            cursor.execute("SELECT attendanceID, checkOutTime FROM attendance WHERE studentID = %s AND DATE(date) = %s", (student_id, today))
+            attendance = cursor.fetchone()
+            
+            if attendance:
+                attendance_id = attendance[0]
+                check_out_time = attendance[1]  # Now we correctly get the checkOutTime
+                
+                if check_out_time is not None:
+                    messagebox.showinfo("Error", f"{qr_data}\nYou have already checked out today!")
+                else:
+                    cursor.execute("UPDATE attendance SET checkOutTime = %s WHERE attendanceID = %s", (current_time, attendance_id))
+                    messagebox.showinfo("Check-Out", f"{qr_data}\nSuccessfully Checked Out!")
+            else:
+                cursor.execute("INSERT INTO attendance (date, checkInTime, studentID) VALUES (%s, %s, %s)", (today, current_time, student_id))
+                messagebox.showinfo("Check-In", f"{qr_data}\nSuccessfully Checked In!")
+            
+            db.commit()
+        else:
+            messagebox.showerror("Error", "Student not found!")
+        
+        cursor.close()
+        db.close()
+
 
     def create_wind_like_scanning_bar(self, frame):
         """ Create a moving wind-like scanning line effect with reversed fading and minimal solid part """

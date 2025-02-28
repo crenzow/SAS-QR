@@ -3,8 +3,16 @@ from tkinter import PhotoImage
 from tkinter import ttk  # Import ttk for Treeview
 import qrcode
 from PIL import Image, ImageTk
-
-
+import smtplib
+from email.mime.multipart import MIMEMultipart
+from email.mime.base import MIMEBase
+from email.mime.text import MIMEText
+from email import encoders
+import tkinter.simpledialog
+import os
+import mysql.connector
+import threading  # For running the email sending in a separate thread
+from tkinter import messagebox
 
 class Admin(tk.Toplevel):
     def __init__(self, parent):
@@ -12,7 +20,7 @@ class Admin(tk.Toplevel):
         self.geometry("1150x750")
         self.title("Dashboard UI")
 
-        self.center_window(1150, 750)
+        self.center_window(self, 1150, 750)
 
         self.sidebar = tk.Frame(self, bg="#8B0000", width=210, height=750)
         self.sidebar.pack_propagate(False)
@@ -51,13 +59,12 @@ class Admin(tk.Toplevel):
         tk.Label(self.main_content, text="Students Page", bg="#F2EEE9", font=("Segoe UI", 16)).pack(pady=20)
 
         # Create a Treeview widget for the table
-        columns = ("srCode", "firstName", "middleName", "lastName", "email", "contactNum")
+        columns = ("srCode", "firstName", "lastName", "email", "contactNum")
         self.tree = ttk.Treeview(self.main_content, columns=columns, show="headings")
 
         # Define column headings
         self.tree.heading("srCode", text="SR Code")
         self.tree.heading("firstName", text="First Name")
-        self.tree.heading("middleName", text="Middle Name")
         self.tree.heading("lastName", text="Last Name")
         self.tree.heading("email", text="Email")
         self.tree.heading("contactNum", text="Contact Number")
@@ -65,19 +72,30 @@ class Admin(tk.Toplevel):
         # Set column widths (you can adjust these values based on your preference)
         self.tree.column("srCode", width=75, anchor=tk.W, stretch=tk.YES)
         self.tree.column("firstName", width=100, anchor=tk.W, stretch=tk.YES)
-        self.tree.column("middleName", width=100, anchor=tk.W, stretch=tk.YES)
         self.tree.column("lastName", width=100, anchor=tk.W, stretch=tk.YES)
         self.tree.column("email", width=175, anchor=tk.W, stretch=tk.YES)  # Increased width for emails
         self.tree.column("contactNum", width=100, anchor=tk.W, stretch=tk.YES)
 
-        # Add some sample data (you can replace this with actual data)
-        students_data = [
-            ("S001", "John", "Doe", "Smith", "21-10452@g.batstate-u.edu.ph", "1234567890"),
-            ("S002", "Jane", "Mary", "Doe", "jane.doe@example.com", "0987654321")
-        ]
-        
-        for student in students_data:
-            self.tree.insert("", tk.END, values=student)
+        # Fetch data from the database
+        try:
+            conn = mysql.connector.connect(
+                host="localhost",
+                user="root",  # Replace with your DB username
+                password="",  # Replace with your DB password
+                database="student_attendance_db"  # Replace with your database name
+            )
+            cursor = conn.cursor()
+            cursor.execute("SELECT srCode, firstName, lastName, email, contactNum FROM students")  # Adjust the table name if needed
+            students_data = cursor.fetchall()
+
+            # Insert data into the Treeview
+            for student in students_data:
+                self.tree.insert("", tk.END, values=student)
+
+            cursor.close()
+            conn.close()
+        except mysql.connector.Error as err:
+            print(f"Database error: {err}")
 
         # Apply styling to change selected row color
         style = ttk.Style()
@@ -103,11 +121,11 @@ class Admin(tk.Toplevel):
         self.qrCode_frame = tk.Frame(self.main_content, bg="#8B0000")
         self.qrCode_frame.place(x=610,y=110,width=300,height=300)
 
-        viewBtn = tk.Button(self.main_content, text="View QR Code", font=("Segoe UI", 10, "bold"), bg="#8B0000", fg="white", width=15, height=2)
-        viewBtn.place(x=610, y=420, width=120, height=40)
+        saveBtn = tk.Button(self.main_content, text="Save As", font=("Segoe UI", 10, "bold"), bg="#8B0000", fg="white", width=15, height=2, command=self.saveAs)
+        saveBtn.place(x=610, y=420, width=120, height=40)
 
-        emailBtn = tk.Button(self.main_content, text="Send to Email", font=("Segoe UI", 10, "bold"), bg="#8B0000", fg="white", width=15, height=2)
-        emailBtn.place(x=790, y=420, width=120, height=40)
+        self.emailBtn = tk.Button(self.main_content, text="Send Via Email", font=("Segoe UI", 10, "bold"), bg="#8B0000", fg="white", width=15, height=2, command=self.send_email)
+        self.emailBtn.place(x=790, y=420, width=120, height=40)
 
         actions_frame = tk.Frame(self.main_content, bg="white")
         actions_frame.place(x=610,y=490,width=300,height=200)
@@ -128,6 +146,9 @@ class Admin(tk.Toplevel):
         self.destroy()  # Closes the Admin window
         self.master.deiconify() 
 
+    def saveAs(self):
+        print("")
+
     def generate_qr_code(self, event):
         # Get selected row
         selected_item = self.tree.selection()
@@ -135,11 +156,10 @@ class Admin(tk.Toplevel):
             item = self.tree.item(selected_item[0])
             sr_code = item['values'][0]
             first_name = item['values'][1]
-            middle_name = item['values'][2]
-            last_name = item['values'][3]
+            last_name = item['values'][2]
 
             # Combine information to generate QR code content
-            qr_content = f"SR Code: {sr_code}\nName: {first_name} {middle_name} {last_name}"
+            qr_content = f"SR Code: {sr_code}\nName: {first_name} {last_name}"
 
             # Generate QR Code
             qr = qrcode.QRCode(
@@ -155,6 +175,9 @@ class Admin(tk.Toplevel):
             img = qr.make_image(fill="black", back_color="white")
             img = img.resize((300, 300), Image.LANCZOS)  # Resize to fit into the frame
 
+            # Save the generated image as an attribute of the class
+            self.qr_code_image = img
+
             # Convert image to tkinter PhotoImage for display
             img_tk = ImageTk.PhotoImage(img)
 
@@ -163,16 +186,178 @@ class Admin(tk.Toplevel):
             label.image = img_tk  # Keep a reference to avoid garbage collection
             label.place(x=0, y=0, width=300, height=300)
 
+    def former_sendEmail(self):
+        # Get the email address via a simple dialog popup
+        """
+        email_address = tk.simpledialog.askstring("Email", "Enter the recipient's email address:")
+        if not email_address:
+            print("No email address provided.")
+            return
+
+        if not hasattr(self, 'qr_code_image'):
+            print("No QR code generated.")
+            return
+        """
+
+        # Get selected row
+        selected_item = self.tree.selection()
+        if not selected_item:
+            print("No row selected.")
+            return
+
+        item = self.tree.item(selected_item[0])
+        email_address = item['values'][3]  # Assuming email is the 4th column
+
+        if not email_address:
+            print("No email found for selected row.")
+            return
+
+        if not hasattr(self, 'qr_code_image'):
+            print("No QR code generated.")
+            return
+
+        # Save the QR code image to a temporary file
+        qr_img_path = "latest_qr_code.png"
+        self.qr_code_image.save(qr_img_path)
+
+        # Email setup
+        sender_email = ""  # Replace with your email
+        sender_password = ""  # Replace with your email password
+        subject = "QR Code"
+        body = "Attached is the latest generated QR code."
+
+        # Create message
+        msg = MIMEMultipart()
+        msg['From'] = sender_email
+        msg['To'] = email_address
+        msg['Subject'] = subject
+        msg.attach(MIMEText(body, 'plain'))
+
+        # Attach the QR code image
+        attachment = open(qr_img_path, "rb")
+        part = MIMEBase('application', 'octet-stream')
+        part.set_payload(attachment.read())
+        encoders.encode_base64(part)
+        part.add_header('Content-Disposition', f'attachment; filename={qr_img_path}')
+        msg.attach(part)
+        attachment.close()
+
+        try:
+            # Establish SMTP connection
+            server = smtplib.SMTP('smtp.gmail.com', 587)  # Use your SMTP server and port
+            server.starttls()
+            server.login(sender_email, sender_password)
+
+            # Send email
+            server.sendmail(sender_email, email_address, msg.as_string())
+            print(f"Email sent to {email_address}")
+
+        except Exception as e:
+            print(f"Failed to send email: {e}")
+        finally:
+            server.quit()
+
+        # Optionally delete the temporary file after sending the email
+        if os.path.exists(qr_img_path):
+            os.remove(qr_img_path)
+
+    def send_email(self):
+        def send():
+            try:
+                # Disable the send button while sending
+                self.emailBtn.config(state=tk.DISABLED)
+              #  messagebox.showinfo("Sending", "Please wait... Sending email.")
+
+                # Create a loading message window
+                loading_window = tk.Toplevel(self.main_content)
+                loading_window.title("Sending Email")
+                loading_window.geometry("250x100")
+                self.center_window(loading_window, 250, 100)
+                loading_label = tk.Label(loading_window, text="Sending email...\nPlease wait.", font=("Segoe UI", 10))
+                loading_label.pack(expand=True, padx=10, pady=10)
+                loading_window.update_idletasks()  # Ensure it's shown immediately
+                
+
+                # Get selected row
+                selected_item = self.tree.selection()
+                if not selected_item:
+                    messagebox.showwarning("No Selection", "Please select a row first.")
+                    self.emailBtn.config(state=tk.NORMAL)  # Re-enable button
+                    return
+
+                item = self.tree.item(selected_item[0])
+                sr_code = item['values'][0]
+                email_address = item['values'][3]  # Assuming email is in the 4th column
+
+                if not email_address:
+                    loading_window.destroy()
+                    messagebox.showerror("Missing Email", "No email found for the selected row.")
+                    self.emailBtn.config(state=tk.NORMAL)
+                    return
+
+                if not hasattr(self, 'qr_code_image'):
+                    loading_window.destroy()
+                    messagebox.showerror("No QR Code", "No QR code has been generated.")
+                    self.emailBtn.config(state=tk.NORMAL)
+                    return
+
+                # Save the QR code image to a temporary file
+                qr_img_path = f"{sr_code}.png"
+                self.qr_code_image.save(qr_img_path)
+
+                # Email setup
+                sender_email = ""  # Replace with your email
+                sender_password = ""  # Replace with your email password
+                subject = "QR Code"
+                body = "Attached is the latest generated QR code."
+
+                # Create email message
+                msg = MIMEMultipart()
+                msg['From'] = sender_email
+                msg['To'] = email_address
+                msg['Subject'] = subject
+                msg.attach(MIMEText(body, 'plain'))
+
+                # Attach the QR code image
+                with open(qr_img_path, "rb") as attachment:
+                    part = MIMEBase('application', 'octet-stream')
+                    part.set_payload(attachment.read())
+                    encoders.encode_base64(part)
+                    part.add_header('Content-Disposition', f'attachment; filename="{qr_img_path}"')
+                    msg.attach(part)
+
+                # Send email
+                server = smtplib.SMTP('smtp.gmail.com', 587)
+                server.starttls()
+                server.login(sender_email, sender_password)
+                server.sendmail(sender_email, email_address, msg.as_string())
+                server.quit()
+
+                loading_window.destroy()
+
+                messagebox.showinfo("Success", f"Email successfully sent to {email_address}.")
+
+            except Exception as e:
+                loading_window.destroy()
+                messagebox.showerror("Email Error", f"Failed to send email: {e}")
+
+            finally:
+                self.emailBtn.config(state=tk.NORMAL)  # Re-enable button after process
+
+        # Run the sending function in a separate thread to prevent UI freezing
+        threading.Thread(target=send, daemon=True).start()
+
     def clear_main_content(self):
         for widget in self.main_content.winfo_children():
             widget.destroy()
 
-    def center_window(self, width, height):
+    def center_window(self, window, width, height):
+        window.update_idletasks()  # Ensure correct dimensions
         screen_width = self.winfo_screenwidth()
         screen_height = self.winfo_screenheight()
         x = (screen_width - width) // 2
         y = (screen_height - height) // 2
-        self.geometry(f"{width}x{height}+{x}+{y}")
+        window.geometry(f"{width}x{height}+{x}+{y}")
 
 
 if __name__ == "__main__":
