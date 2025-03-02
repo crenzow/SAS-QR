@@ -94,7 +94,8 @@ class Login(tk.Toplevel):
         if self.authenticate_user(username, password):
             # If authentication is successful, open Admin window
             Admin(self.master)
-            self.destroy()
+            self.destroy() 
+            
         else:
             # If authentication fails, show an error message
             self.show_error_message()

@@ -14,6 +14,12 @@ import mysql.connector
 import threading  # For running the email sending in a separate thread
 from tkinter import messagebox
 
+from tkinter import filedialog
+import qrcode
+from PIL import Image, ImageTk
+
+from DatabaseConnection import connect_db
+
 class Admin(tk.Toplevel):
     def __init__(self, parent):
         super().__init__(parent)  # Properly initialize Toplevel
@@ -38,6 +44,7 @@ class Admin(tk.Toplevel):
         # Sidebar Buttons
         self.create_buttons()
         self.open_students()
+        
 
     def create_button(self, parent, text, command):
         return tk.Button(parent, text=text, font=("Segoe UI", 12, "bold"), fg="white", bg="#B33A3A", 
@@ -53,10 +60,38 @@ class Admin(tk.Toplevel):
         for text, command in buttons: 
             btn = self.create_button(self.sidebar, text, command)
             btn.pack(pady=5)
+    
+    def refresh_table(self):
+        """Fetch updated data from MySQL and refresh the table."""
+        for row in self.tree.get_children():
+            self.tree.delete(row)  # Clear existing rows
+
+        try:
+            conn = mysql.connector.connect(
+                host="localhost",
+                user="root",
+                password="",
+                database="student_attendance_db"
+            )
+            cursor = conn.cursor()
+
+            cursor.execute("SELECT srCode, firstName, lastName, email, contactNum FROM Students")
+            for row in cursor.fetchall():
+                self.tree.insert("", "end", values=row)
+
+        except mysql.connector.Error as e:
+            messagebox.showerror("Error", f"Failed to load student data: {e}")
+
+        finally:
+            conn.close()
 
     def open_students(self):
         self.clear_main_content()
-        tk.Label(self.main_content, text="Students Page", bg="#F2EEE9", font=("Segoe UI", 16)).pack(pady=20)
+      #  tk.Label(self.main_content, text="Students Page", bg="#F2EEE9", font=("Segoe UI", 16)).pack(pady=20)
+
+        header_label = tk.Label(self.main_content, text="Students Page", 
+                                font=("Georgia", 24, "bold"), bg="#F2EEE9", fg="#8B0000")
+        header_label.place(relx=0.5, y=50, anchor="center")
 
         # Create a Treeview widget for the table
         columns = ("srCode", "firstName", "lastName", "email", "contactNum")
@@ -87,10 +122,12 @@ class Admin(tk.Toplevel):
             cursor = conn.cursor()
             cursor.execute("SELECT srCode, firstName, lastName, email, contactNum FROM students")  # Adjust the table name if needed
             students_data = cursor.fetchall()
+            
 
             # Insert data into the Treeview
             for student in students_data:
                 self.tree.insert("", tk.END, values=student)
+                
 
             cursor.close()
             conn.close()
@@ -122,32 +159,199 @@ class Admin(tk.Toplevel):
         self.qrCode_frame.place(x=610,y=110,width=300,height=300)
 
         saveBtn = tk.Button(self.main_content, text="Save As", font=("Segoe UI", 10, "bold"), bg="#8B0000", fg="white", width=15, height=2, command=self.saveAs)
-        saveBtn.place(x=610, y=420, width=120, height=40)
+        saveBtn.place(x=620, y=420, width=120, height=40)
 
         self.emailBtn = tk.Button(self.main_content, text="Send Via Email", font=("Segoe UI", 10, "bold"), bg="#8B0000", fg="white", width=15, height=2, command=self.send_email)
-        self.emailBtn.place(x=790, y=420, width=120, height=40)
+        self.emailBtn.place(x=770, y=420, width=120, height=40)
 
         actions_frame = tk.Frame(self.main_content, bg="white")
         actions_frame.place(x=610,y=490,width=300,height=200)
 
+        enrollBtn = tk.Button(actions_frame, text="Enroll", font=("Segoe UI", 10, "bold"), bg="#8B0000", fg="white", width=15, height=2, command=self.enroll)
+        enrollBtn.place(relx=0.5, y=50, width=160, height=40, anchor="center")
+
+        updateBtn = tk.Button(actions_frame, text="Update", font=("Segoe UI", 10, "bold"), bg="#8B0000", fg="white", width=15, height=2, command=self.saveAs)
+        updateBtn.place(relx=0.5, y=100, width=160, height=40, anchor="center")
+
+        unenrollBtn = tk.Button(actions_frame, text="Drop", font=("Segoe UI", 10, "bold"), bg="#8B0000", fg="white", width=15, height=2, command=self.saveAs)
+        unenrollBtn.place(relx=0.5, y=150, width=160, height=40, anchor="center")
+
         # Bind selection event to generate QR Code
         self.tree.bind("<<TreeviewSelect>>", self.generate_qr_code)
 
+    def enroll(self):
+            # Open a new window to input student details
+            enroll_window = tk.Toplevel(self)
+            enroll_window.title("Enroll Student")
+            self.center_window(enroll_window, 250, 150)
+
+            # Labels and Entry Fields
+            tk.Label(enroll_window, text="SR Code:").grid(row=0, column=0)
+            sr_code_entry = tk.Entry(enroll_window)
+            sr_code_entry.grid(row=0, column=1)
+
+            tk.Label(enroll_window, text="First Name:").grid(row=1, column=0)
+            first_name_entry = tk.Entry(enroll_window)
+            first_name_entry.grid(row=1, column=1)
+
+            tk.Label(enroll_window, text="Last Name:").grid(row=2, column=0)
+            last_name_entry = tk.Entry(enroll_window)
+            last_name_entry.grid(row=2, column=1)
+
+            tk.Label(enroll_window, text="Email:").grid(row=3, column=0)
+            email_entry = tk.Entry(enroll_window)
+            email_entry.grid(row=3, column=1)
+
+            tk.Label(enroll_window, text="Contact Number:").grid(row=4, column=0)
+            contact_entry = tk.Entry(enroll_window)
+            contact_entry.grid(row=4, column=1)
+
+            # Function to save student info to MySQL
+            def save_student():
+                sr_code = sr_code_entry.get()
+                first_name = first_name_entry.get()
+                last_name = last_name_entry.get()
+                email = email_entry.get()
+                contact = contact_entry.get()
+
+                try:
+                    # Connect to MySQL database
+                    conn = mysql.connector.connect(
+                        host="localhost",
+                        user="root",  # Change this to your MySQL username
+                        password="",  # Change this to your MySQL password
+                        database="student_attendance_db"  # Change to your database name
+                    )
+                    cursor = conn.cursor()
+
+                    # Insert student into MySQL table
+                    cursor.execute("""
+                        INSERT INTO Students (srCode, firstName, lastName, email, contactNum)
+                        VALUES (%s, %s, %s, %s, %s)
+                    """, (sr_code, first_name, last_name, email, contact))
+
+                    conn.commit()
+                    messagebox.showinfo("Success", "Student enrolled successfully!")
+                    self.refresh_table()
+                    enroll_window.destroy()  # Close window after successful enrollment
+
+                except mysql.connector.Error as e:
+                    messagebox.showerror("Error", f"Failed to enroll student: {e}")
+
+                finally:
+                    conn.close()  # Close database connection
+
+            # Save Button
+            tk.Button(enroll_window, text="Enroll", command=save_student).grid(row=5, column=1)
+
+        # Add Enroll Button to the main window
+            self.enroll_button = tk.Button(self, text="Enroll Student", command=self.enroll)
+            self.enroll_button.pack()
 
     def open_attendance(self):
         self.clear_main_content()
-        tk.Label(self.main_content, text="Attendance Page", bg="#F2EEE9", font=("Segoe UI", 16)).pack(pady=20)
+      #  tk.Label(self.main_content, text="Attendance Page", bg="#F2EEE9", font=("Segoe UI", 16)).pack(pady=20)
+
+        header_label = tk.Label(self.main_content, text="Attendance Page", 
+                                font=("Georgia", 24, "bold"), bg="#F2EEE9", fg="#8B0000")
+        header_label.place(relx=0.5, y=50, anchor="center")
+
+        # Create a Treeview widget for the table
+        columns = ("name", "srCode", "date", "checkInTime", "checkOutTime")
+        self.tree = ttk.Treeview(self.main_content, columns=columns, show="headings")
+
+        # Define column headings
+        self.tree.heading("name", text="Name")
+        self.tree.heading("srCode", text="SR Code")
+        self.tree.heading("date", text="Date")
+        self.tree.heading("checkInTime", text="Check In Time")
+        self.tree.heading("checkOutTime", text="Check Out Time")
+
+
+        # Set column widths (you can adjust these values based on your preference)
+        self.tree.column("name", width=150, anchor=tk.W, stretch=tk.YES)
+        self.tree.column("srCode", width=150, anchor=tk.W, stretch=tk.YES)
+        self.tree.column("date", width=150, anchor=tk.W, stretch=tk.YES)
+        self.tree.column("checkInTime", width=150, anchor=tk.W, stretch=tk.YES)
+        self.tree.column("checkOutTime", width=150, anchor=tk.W, stretch=tk.YES)  # Increased width for emails
+
+        # Fetch data from the database
+        try:
+            conn = mysql.connector.connect(
+                host="localhost",
+                user="root",  # Replace with your DB username
+                password="",  # Replace with your DB password
+                database="student_attendance_db"  # Replace with your database name
+            )
+            cursor = conn.cursor()
+            cursor.execute("""
+            SELECT CONCAT(s.firstName, ' ', s.lastName) AS fullName, 
+                s.srCode, 
+                DATE_FORMAT(a.date, '%M %e, %Y') AS formattedDate,
+                DATE_FORMAT(a.checkInTime, '%h:%i %p') AS checkInTime, 
+                DATE_FORMAT(a.checkOutTime, '%h:%i %p') AS checkOutTime
+            FROM attendance a 
+            JOIN students s ON a.studentID = s.studentID
+        """)
+
+            # Adjust the table name if needed
+            students_data = cursor.fetchall()
+
+            # Insert data into the Treeview
+            for student in students_data:
+                self.tree.insert("", tk.END, values=student)
+
+            cursor.close()
+            conn.close()
+        except mysql.connector.Error as err:
+            print(f"Database error: {err}")
+
+        # Apply styling to change selected row color
+        style = ttk.Style()
+        style.configure("Treeview",
+                        background="#f0f0f0",  # Background color of rows
+                        fieldbackground="#f0f0f0",  # Background color for text field
+                        foreground="black")  # Text color
+        style.map("Treeview",
+                  background=[('selected', '#8B0000')])  # Color for selected row (light red)
+
+        # Create Scrollbars
+        scrollbar_y = tk.Scrollbar(self.main_content, orient=tk.VERTICAL, command=self.tree.yview)
+        scrollbar_x = tk.Scrollbar(self.main_content, orient=tk.HORIZONTAL, command=self.tree.xview)
+
+        # Attach Scrollbars to the Treeview widget
+        self.tree.configure(yscrollcommand=scrollbar_y.set, xscrollcommand=scrollbar_x.set)
+
+       # Use place to position the Treeview and Scrollbars
+        self.tree.place(x=50, y=110, width=800, height=600)
+        scrollbar_y.place(x=850, y=110, height=600)
+        scrollbar_x.place(x=50, y=710, width=800)
 
     def open_reports(self):
         self.clear_main_content()
-        tk.Label(self.main_content, text="Reports Page", bg="#F2EEE9", font=("Segoe UI", 16)).pack(pady=20)
+       # tk.Label(self.main_content, text="Reports Page", bg="#F2EEE9", font=("Segoe UI", 16)).pack(pady=20)
+
+        header_label = tk.Label(self.main_content, text="Reports Page", 
+                                font=("Georgia", 24, "bold"), bg="#F2EEE9", fg="#8B0000")
+        header_label.place(relx=0.5, y=50, anchor="center")
 
     def logout(self):     
         self.destroy()  # Closes the Admin window
         self.master.deiconify() 
 
     def saveAs(self):
-        print("")
+        if hasattr(self, "qr_code_image"):  # Check if QR code exists
+            file_path = filedialog.asksaveasfilename(
+                defaultextension=".png",  # Default file extension
+                filetypes=[("PNG files", "*.png"), ("All Files", "*.*")],  # Allowed file types
+                title="Save QR Code"
+            )
+            
+            if file_path:  # If the user chose a path
+                self.qr_code_image.save(file_path)  # Save the image
+                print(f"QR Code saved at: {file_path}")  # Show file path in console
+        else:
+            ("No QR code generated yet.")  # Prevent saving if no QR code exists
 
     def generate_qr_code(self, event):
         # Get selected row
