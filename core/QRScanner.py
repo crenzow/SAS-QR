@@ -226,7 +226,7 @@ class QRScanner(tk.Toplevel):
         if self.cap:
             self.cap.release()  # Release the webcam when closing
             self.cap = None
-        self.destroy()  # Close the window
+        self.destroy()  
     
 
 if __name__ == "__main__":

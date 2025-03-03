@@ -3,6 +3,7 @@ from tkinter import PhotoImage
 from PIL import Image, ImageTk
 from Admin import Admin
 from DatabaseConnection import connect_db
+import mysql.connector
 
 class Login(tk.Toplevel):
     def __init__(self, parent):
@@ -72,6 +73,7 @@ class Login(tk.Toplevel):
         back_button = tk.Button(left_frame, text="Back", font=("Segoe UI", 10, "bold"), bg="#8B0000", fg="white", width=15, height=2, command=self.back)
         back_button.place(x=10, y=10, width=65, height=40)
 
+        
     def center_window(self, width, height):
         screen_width = self.winfo_screenwidth()
         screen_height = self.winfo_screenheight()
@@ -101,24 +103,29 @@ class Login(tk.Toplevel):
             self.show_error_message()
 
     def authenticate_user(self, username, password):
-        # Connect to the database
+        """Authenticate user credentials from the database."""
         connection = connect_db()
         if connection is None:
             return False  # If connection fails, return False
         
         cursor = connection.cursor()
         
-        # Query to fetch the admin record based on the username
-        query = "SELECT * FROM admin WHERE username=%s AND password=%s"
-        cursor.execute(query, (username, password))
+        try:
+            # Query to fetch the admin record based on the username and password
+            query = "SELECT * FROM admin WHERE username=%s AND password=%s"
+            cursor.execute(query, (username, password))
+            
+            result = cursor.fetchone()  # Fetch one record
+            
+            return result is not None  # Return True if a match is found
         
-        # Fetch one record (if any)
-        result = cursor.fetchone()
+        except mysql.connector.Error as err:
+            print(f"Database Error: {err}")  # Print the error message
+            return False
         
-        connection.close()  # Close the database connection
-        
-        # Return True if a match is found, False otherwise
-        return result is not None
+        finally:
+            connection.close()  # Ensure the connection is always closed
+
 
     def show_error_message(self):
         error_window = tk.Toplevel(self)

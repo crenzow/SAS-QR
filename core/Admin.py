@@ -17,7 +17,6 @@ from tkinter import messagebox
 from tkinter import filedialog
 import qrcode
 from PIL import Image, ImageTk
-
 from DatabaseConnection import connect_db
 
 class Admin(tk.Toplevel):
@@ -111,29 +110,6 @@ class Admin(tk.Toplevel):
         self.tree.column("email", width=175, anchor=tk.W, stretch=tk.YES)  # Increased width for emails
         self.tree.column("contactNum", width=100, anchor=tk.W, stretch=tk.YES)
 
-        # Fetch data from the database
-        try:
-            conn = mysql.connector.connect(
-                host="localhost",
-                user="root",  # Replace with your DB username
-                password="",  # Replace with your DB password
-                database="student_attendance_db"  # Replace with your database name
-            )
-            cursor = conn.cursor()
-            cursor.execute("SELECT srCode, firstName, lastName, email, contactNum FROM students")  # Adjust the table name if needed
-            students_data = cursor.fetchall()
-            
-
-            # Insert data into the Treeview
-            for student in students_data:
-                self.tree.insert("", tk.END, values=student)
-                
-
-            cursor.close()
-            conn.close()
-        except mysql.connector.Error as err:
-            print(f"Database error: {err}")
-
         # Apply styling to change selected row color
         style = ttk.Style()
         style.configure("Treeview",
@@ -178,6 +154,26 @@ class Admin(tk.Toplevel):
 
         # Bind selection event to generate QR Code
         self.tree.bind("<<TreeviewSelect>>", self.generate_qr_code)
+        self.load_students()
+    
+    def load_students(self):
+        # Fetch data from the database
+        try:
+            conn = connect_db()
+            cursor = conn.cursor()
+            cursor.execute("SELECT srCode, firstName, lastName, email, contactNum FROM students")  # Adjust the table name if needed
+            students_data = cursor.fetchall()
+            
+
+            # Insert data into the Treeview
+            for student in students_data:
+                self.tree.insert("", tk.END, values=student)
+                
+
+            cursor.close()
+            conn.close()
+        except mysql.connector.Error as err:
+            print(f"Database error: {err}")
 
     def enroll(self):
             # Open a new window to input student details
