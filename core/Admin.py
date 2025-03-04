@@ -26,6 +26,8 @@ class Admin(tk.Toplevel):
         self.title("Dashboard UI")
 
         self.center_window(self, 1150, 750)
+      #  self.lift()
+      #  self.focus_force()
 
         self.sidebar = tk.Frame(self, bg="#8B0000", width=210, height=750)
         self.sidebar.pack_propagate(False)
@@ -59,30 +61,6 @@ class Admin(tk.Toplevel):
         for text, command in buttons: 
             btn = self.create_button(self.sidebar, text, command)
             btn.pack(pady=5)
-    
-    def refresh_table(self):
-        """Fetch updated data from MySQL and refresh the table."""
-        for row in self.tree.get_children():
-            self.tree.delete(row)  # Clear existing rows
-
-        try:
-            conn = mysql.connector.connect(
-                host="localhost",
-                user="root",
-                password="",
-                database="student_attendance_db"
-            )
-            cursor = conn.cursor()
-
-            cursor.execute("SELECT srCode, firstName, lastName, email, contactNum FROM Students")
-            for row in cursor.fetchall():
-                self.tree.insert("", "end", values=row)
-
-        except mysql.connector.Error as e:
-            messagebox.showerror("Error", f"Failed to load student data: {e}")
-
-        finally:
-            conn.close()
 
     def open_students(self):
         self.clear_main_content()
@@ -164,6 +142,9 @@ class Admin(tk.Toplevel):
             cursor.execute("SELECT srCode, firstName, lastName, email, contactNum FROM students")  # Adjust the table name if needed
             students_data = cursor.fetchall()
             
+            for row in self.tree.get_children():
+                self.tree.delete(row)  # Clear existing rows
+
 
             # Insert data into the Treeview
             for student in students_data:
@@ -176,73 +157,52 @@ class Admin(tk.Toplevel):
             print(f"Database error: {err}")
 
     def enroll(self):
-            # Open a new window to input student details
-            enroll_window = tk.Toplevel(self)
-            enroll_window.title("Enroll Student")
-            self.center_window(enroll_window, 250, 150)
+        # Open a new window to input student details
+        enroll_window = tk.Toplevel(self)
+        enroll_window.title("Enroll Student")
+        self.center_window(enroll_window, 300, 250)  # Made window larger for spacing
+        enroll_window.configure(bg="#F2EEE9")  # Set background color
 
-            # Labels and Entry Fields
-            tk.Label(enroll_window, text="SR Code:").grid(row=0, column=0)
-            sr_code_entry = tk.Entry(enroll_window)
-            sr_code_entry.grid(row=0, column=1)
+        # Labels and Entry Fields
+        fields = ["SR Code:", "First Name:", "Last Name:", "Email:", "Contact Number:"]
+        entries = []
 
-            tk.Label(enroll_window, text="First Name:").grid(row=1, column=0)
-            first_name_entry = tk.Entry(enroll_window)
-            first_name_entry.grid(row=1, column=1)
+        for i, field in enumerate(fields):
+            tk.Label(enroll_window, text=field, bg="#F2EEE9", font=("Arial", 12)).grid(row=i, column=0, padx=10, pady=5, sticky="e")
+            entry = tk.Entry(enroll_window, font=("Arial", 12), width=25)
+            entry.grid(row=i, column=1, padx=10, pady=5)
+            entries.append(entry)
 
-            tk.Label(enroll_window, text="Last Name:").grid(row=2, column=0)
-            last_name_entry = tk.Entry(enroll_window)
-            last_name_entry.grid(row=2, column=1)
+        # Function to save student info to MySQL
+        def save_student():
+            sr_code, first_name, last_name, email, contact = [entry.get() for entry in entries]
 
-            tk.Label(enroll_window, text="Email:").grid(row=3, column=0)
-            email_entry = tk.Entry(enroll_window)
-            email_entry.grid(row=3, column=1)
+            try:
+                conn = connect_db()
+                cursor = conn.cursor()
 
-            tk.Label(enroll_window, text="Contact Number:").grid(row=4, column=0)
-            contact_entry = tk.Entry(enroll_window)
-            contact_entry.grid(row=4, column=1)
+                cursor.execute("""
+                    INSERT INTO Students (srCode, firstName, lastName, email, contactNum)
+                    VALUES (%s, %s, %s, %s, %s)
+                """, (sr_code, first_name, last_name, email, contact))
 
-            # Function to save student info to MySQL
-            def save_student():
-                sr_code = sr_code_entry.get()
-                first_name = first_name_entry.get()
-                last_name = last_name_entry.get()
-                email = email_entry.get()
-                contact = contact_entry.get()
+                conn.commit()
+                messagebox.showinfo("Success", "Student enrolled successfully!")
+                self.load_students()
+                enroll_window.destroy()
 
-                try:
-                    # Connect to MySQL database
-                    conn = mysql.connector.connect(
-                        host="localhost",
-                        user="root",  # Change this to your MySQL username
-                        password="",  # Change this to your MySQL password
-                        database="student_attendance_db"  # Change to your database name
-                    )
-                    cursor = conn.cursor()
+            except mysql.connector.Error as e:
+                messagebox.showerror("Error", f"Failed to enroll student: {e}")
 
-                    # Insert student into MySQL table
-                    cursor.execute("""
-                        INSERT INTO Students (srCode, firstName, lastName, email, contactNum)
-                        VALUES (%s, %s, %s, %s, %s)
-                    """, (sr_code, first_name, last_name, email, contact))
+            finally:
+                conn.close()
 
-                    conn.commit()
-                    messagebox.showinfo("Success", "Student enrolled successfully!")
-                    self.refresh_table()
-                    enroll_window.destroy()  # Close window after successful enrollment
-
-                except mysql.connector.Error as e:
-                    messagebox.showerror("Error", f"Failed to enroll student: {e}")
-
-                finally:
-                    conn.close()  # Close database connection
-
-            # Save Button
-            tk.Button(enroll_window, text="Enroll", command=save_student).grid(row=5, column=1)
-
-        # Add Enroll Button to the main window
-            self.enroll_button = tk.Button(self, text="Enroll Student", command=self.enroll)
-            self.enroll_button.pack()
+        # Enroll Button
+        enroll_button = tk.Button(enroll_window, text="Enroll", command=save_student, 
+                                font=("Arial", 12, "bold"), fg="white", bg="#8B0000", 
+                                padx=10, pady=5, relief="raised", width=15)
+        enroll_button.grid(row=len(fields), column=0, columnspan=2, pady=15)
+            
 
     def open_attendance(self):
         self.clear_main_content()
@@ -273,12 +233,7 @@ class Admin(tk.Toplevel):
 
         # Fetch data from the database
         try:
-            conn = mysql.connector.connect(
-                host="localhost",
-                user="root",  # Replace with your DB username
-                password="",  # Replace with your DB password
-                database="student_attendance_db"  # Replace with your database name
-            )
+            conn = connect_db()
             cursor = conn.cursor()
             cursor.execute("""
             SELECT CONCAT(s.firstName, ' ', s.lastName) AS fullName, 
