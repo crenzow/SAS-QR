@@ -5,7 +5,10 @@ import numpy as np
 from pyzbar.pyzbar import decode
 from PIL import Image, ImageTk
 from DatabaseConnection import connect_db
-from datetime import datetime
+import time
+from datetime import datetime, timedelta
+
+
 
 class QRScanner(tk.Toplevel):
     def __init__(self, parent):
@@ -14,6 +17,9 @@ class QRScanner(tk.Toplevel):
         self.geometry("1150x750")
         self.configure(bg="#F2EEE9")
         self.center_window(1150, 750)
+
+        self.last_scan_time = {}  # Track last scan times for each student
+        self.scan_cooldown = 5  # Cooldown time in seconds
 
         self.cap = None  # Webcam object
         self.scanning = False  # Toggle state
@@ -158,16 +164,35 @@ class QRScanner(tk.Toplevel):
                 # Schedule next frame update
                 self.after(10, self.scan_qr_code)  # Fast refresh rate
                 
+    def show_timed_message(self, title, message, duration=2000):  # duration in milliseconds (2000ms = 2 seconds)
+        popup = tk.Toplevel()
+        popup.title(title)
+        popup.geometry("300x100")  # Adjust size as needed
+        label = tk.Label(popup, text=message, padx=20, pady=20)
+        label.pack()
+        
+        # Automatically close after the given duration
+        popup.after(duration, popup.destroy)
+
     def process_attendance(self, sr_code, qr_data):
         db = connect_db()
         cursor = db.cursor()
         cursor.execute("SELECT studentID FROM students WHERE srCode = %s", (sr_code,))
         result = cursor.fetchone()
-        
+
+        current_time = datetime.now()
         if result:
             student_id = result[0]
-            today = datetime.now().date()
-            current_time = datetime.now().time()
+            
+
+            # Check last scan time to prevent spam
+            if student_id in self.last_scan_time:
+                time_since_last_scan = (current_time - self.last_scan_time[student_id]).total_seconds()
+                if time_since_last_scan < self.scan_cooldown:
+                    return  # Just ignore the scan without showing a message
+
+            today = current_time.date()
+            current_time_only = current_time.time()
 
             # Select both attendanceID and checkOutTime
             cursor.execute("SELECT attendanceID, checkOutTime FROM attendance WHERE studentID = %s AND DATE(date) = %s", (student_id, today))
@@ -178,17 +203,22 @@ class QRScanner(tk.Toplevel):
                 check_out_time = attendance[1]  # Now we correctly get the checkOutTime
                 
                 if check_out_time is not None:
-                    messagebox.showinfo("Error", f"{qr_data}\nYou have already checked out today!")
+                    self.show_timed_message("Error", f"{qr_data}\nYou have already checked out today!")
                 else:
                     cursor.execute("UPDATE attendance SET checkOutTime = %s WHERE attendanceID = %s", (current_time, attendance_id))
-                    messagebox.showinfo("Check-Out", f"{qr_data}\nSuccessfully Checked Out!")
+                    self.show_timed_message("Check-Out", f"{qr_data}\nSuccessfully Checked Out!")
             else:
                 cursor.execute("INSERT INTO attendance (date, checkInTime, studentID) VALUES (%s, %s, %s)", (today, current_time, student_id))
-                messagebox.showinfo("Check-In", f"{qr_data}\nSuccessfully Checked In!")
+                self.show_timed_message("Check-In", f"{qr_data}\nSuccessfully Checked In!")
             
             db.commit()
-        else:
-            messagebox.showerror("Error", "Student not found!")
+
+            # Update last scan time for cooldown
+            self.last_scan_time[student_id] = current_time
+
+        else: 
+            self.show_timed_message("Error", "Student not found!")
+        self.last_scan_time[sr_code] = current_time  
         
         cursor.close()
         db.close()

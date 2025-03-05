@@ -160,22 +160,41 @@ class Admin(tk.Toplevel):
         # Open a new window to input student details
         enroll_window = tk.Toplevel(self)
         enroll_window.title("Enroll Student")
-        self.center_window(enroll_window, 300, 250)  # Made window larger for spacing
+        self.center_window(enroll_window, 335, 305)  # Made window larger for spacing
         enroll_window.configure(bg="#F2EEE9")  # Set background color
 
-        # Labels and Entry Fields
-        fields = ["SR Code:", "First Name:", "Last Name:", "Email:", "Contact Number:"]
-        entries = []
+        # Make column 1 (entry fields) expand horizontally
+        enroll_window.grid_columnconfigure(1, weight=1)
 
-        for i, field in enumerate(fields):
-            tk.Label(enroll_window, text=field, bg="#F2EEE9", font=("Arial", 12)).grid(row=i, column=0, padx=10, pady=5, sticky="e")
-            entry = tk.Entry(enroll_window, font=("Arial", 12), width=25)
-            entry.grid(row=i, column=1, padx=10, pady=5)
-            entries.append(entry)
+        tk.Label(enroll_window, text="Enroll Student", fg="#8B0000", bg="#F2EEE9", font=("Georgia", 14, "bold")).grid(row=0, column=0, pady=10, columnspan=2, sticky="ew")
+
+        tk.Label(enroll_window, text="SR Code:", bg="#F2EEE9", font=("Segoe UI", 12, "normal")).grid(row=1, column=0, padx=20, sticky="w")
+        sr_code_entry = tk.Entry(enroll_window)
+        sr_code_entry.grid(row=1, column=1, padx=5, pady=5, ipady=5)
+
+        tk.Label(enroll_window, text="First Name:", bg="#F2EEE9", font=("Segoe UI", 12, "normal")).grid(row=2, column=0, padx=20, sticky="w")
+        first_name_entry = tk.Entry(enroll_window)
+        first_name_entry.grid(row=2, column=1, padx=5, pady=5, ipady=5)
+
+        tk.Label(enroll_window, text="Last Name:", bg="#F2EEE9", font=("Segoe UI", 12, "normal")).grid(row=3, column=0, padx=20, sticky="w")
+        last_name_entry = tk.Entry(enroll_window)
+        last_name_entry.grid(row=3, column=1, padx=5, pady=5, ipady=5)
+
+        tk.Label(enroll_window, text="Email:", bg="#F2EEE9", font=("Segoe UI", 12, "normal")).grid(row=4, column=0, padx=20, sticky="w")
+        email_entry = tk.Entry(enroll_window)
+        email_entry.grid(row=4, column=1, padx=5, pady=5, ipady=5)
+
+        tk.Label(enroll_window, text="Contact Number:", bg="#F2EEE9", font=("Segoe UI", 12, "normal")).grid(row=5, column=0, padx=20, sticky="w")
+        contact_entry = tk.Entry(enroll_window)
+        contact_entry.grid(row=5, column=1, padx=5, pady=5, ipady=5)
 
         # Function to save student info to MySQL
         def save_student():
-            sr_code, first_name, last_name, email, contact = [entry.get() for entry in entries]
+            sr_code = sr_code_entry.get()
+            first_name = first_name_entry.get()
+            last_name = last_name_entry.get()
+            email = email_entry.get()
+            contact = contact_entry.get()
 
             try:
                 conn = connect_db()
@@ -197,12 +216,11 @@ class Admin(tk.Toplevel):
             finally:
                 conn.close()
 
-        # Enroll Button
-        enroll_button = tk.Button(enroll_window, text="Enroll", command=save_student, 
-                                font=("Arial", 12, "bold"), fg="white", bg="#8B0000", 
-                                padx=10, pady=5, relief="raised", width=15)
-        enroll_button.grid(row=len(fields), column=0, columnspan=2, pady=15)
-            
+     
+        enroll_button = tk.Button(enroll_window, text="Enroll", fg="#F2EEE9", bg="#8B0000", font=("Segoe UI", 12, "bold"), command=save_student)
+        enroll_button.grid(row=6, column=1, padx=25, pady=10, sticky="e")
+
+     
 
     def open_attendance(self):
         self.clear_main_content()
@@ -424,7 +442,7 @@ class Admin(tk.Toplevel):
               #  messagebox.showinfo("Sending", "Please wait... Sending email.")
 
                 # Create a loading message window
-                loading_window = tk.Toplevel(self.main_content)
+                loading_window = tk.Toplevel()
                 loading_window.title("Sending Email")
                 loading_window.geometry("250x100")
                 self.center_window(loading_window, 250, 100)
