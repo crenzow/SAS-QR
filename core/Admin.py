@@ -18,6 +18,7 @@ from tkinter import filedialog
 import qrcode
 from PIL import Image, ImageTk
 from DatabaseConnection import connect_db
+from tkcalendar import DateEntry
 
 class Admin(tk.Toplevel):
     def __init__(self, parent):
@@ -124,11 +125,11 @@ class Admin(tk.Toplevel):
         enrollBtn = tk.Button(actions_frame, text="Enroll", font=("Segoe UI", 10, "bold"), bg="#8B0000", fg="white", width=15, height=2, command=self.enroll)
         enrollBtn.place(relx=0.5, y=50, width=160, height=40, anchor="center")
 
-        updateBtn = tk.Button(actions_frame, text="Update", font=("Segoe UI", 10, "bold"), bg="#8B0000", fg="white", width=15, height=2, command=self.saveAs)
+        updateBtn = tk.Button(actions_frame, text="Update", font=("Segoe UI", 10, "bold"), bg="#8B0000", fg="white", width=15, height=2, command=self.update)
         updateBtn.place(relx=0.5, y=100, width=160, height=40, anchor="center")
 
-        unenrollBtn = tk.Button(actions_frame, text="Drop", font=("Segoe UI", 10, "bold"), bg="#8B0000", fg="white", width=15, height=2, command=self.saveAs)
-        unenrollBtn.place(relx=0.5, y=150, width=160, height=40, anchor="center")
+        dropBtn = tk.Button(actions_frame, text="Drop", font=("Segoe UI", 10, "bold"), bg="#8B0000", fg="white", width=15, height=2, command=self.drop_student)
+        dropBtn.place(relx=0.5, y=150, width=160, height=40, anchor="center")
 
         # Bind selection event to generate QR Code
         self.tree.bind("<<TreeviewSelect>>", self.generate_qr_code)
@@ -196,6 +197,11 @@ class Admin(tk.Toplevel):
             email = email_entry.get()
             contact = contact_entry.get()
 
+            # Check if any field is empty
+            if not sr_code or not first_name or not last_name or not email or not contact:
+                messagebox.showerror("Error", "All fields must be filled!")
+                return  # Stop function execution if validation fails
+
             try:
                 conn = connect_db()
                 cursor = conn.cursor()
@@ -220,7 +226,153 @@ class Admin(tk.Toplevel):
         enroll_button = tk.Button(enroll_window, text="Enroll", fg="#F2EEE9", bg="#8B0000", font=("Segoe UI", 12, "bold"), command=save_student)
         enroll_button.grid(row=6, column=1, padx=25, pady=10, sticky="e")
 
-     
+    def update(self):
+        # Get selected item from Treeview
+        selected_item = self.tree.focus()
+        if not selected_item:
+            messagebox.showerror("Error", "Please select a student to update.")
+            return
+
+        student_data = self.tree.item(selected_item, "values")
+        if not student_data:
+            messagebox.showerror("Error", "Invalid selection.")
+            return
+        
+        sr_code_value = student_data[0]  # SR Code is the first column
+        first_name_value = student_data[1]
+        last_name_value = student_data[2]
+        email_value = student_data[3]
+        contact_value = student_data[4]
+
+        try:
+            conn = connect_db()
+            cursor = conn.cursor()
+
+            cursor.execute("SELECT studentID FROM Students WHERE srCode=%s", (sr_code_value,))
+            student_id_result = cursor.fetchone()
+            
+            if not student_id_result:
+                messagebox.showerror("Error", "Student not found in database.")
+                conn.close()
+                return
+
+            studentID = student_id_result[0]  # Extract studentID from query result
+
+        except mysql.connector.Error as e:
+            messagebox.showerror("Error", f"Database error: {e}")
+            return
+
+        finally:
+            conn.close()
+
+        # Open a new window to update student details
+        update_info = tk.Toplevel(self)
+        update_info.title("Update Information")
+        self.center_window(update_info, 335, 305)  
+        update_info.configure(bg="#F2EEE9")  
+
+        update_info.grid_columnconfigure(1, weight=1)
+
+        tk.Label(update_info, text="Update Student Details", fg="#8B0000", bg="#F2EEE9", font=("Georgia", 14, "bold")).grid(row=0, column=0, pady=10, columnspan=2, sticky="ew")
+
+        tk.Label(update_info, text="SR Code:", bg="#F2EEE9", font=("Segoe UI", 12, "normal")).grid(row=1, column=0, padx=20, sticky="w")
+        sr_code_entry = tk.Entry(update_info)
+        sr_code_entry.grid(row=1, column=1, padx=5, pady=5, ipady=5)
+        sr_code_entry.insert(0, student_data[0])  # Pre-fill with selected student SR Code
+        sr_code_entry.config(state="normal")  # Make SR Code read-only since it's the primary key
+
+        tk.Label(update_info, text="First Name:", bg="#F2EEE9", font=("Segoe UI", 12, "normal")).grid(row=2, column=0, padx=20, sticky="w")
+        first_name_entry = tk.Entry(update_info)
+        first_name_entry.grid(row=2, column=1, padx=5, pady=5, ipady=5)
+        first_name_entry.insert(0, student_data[1])  
+
+        tk.Label(update_info, text="Last Name:", bg="#F2EEE9", font=("Segoe UI", 12, "normal")).grid(row=3, column=0, padx=20, sticky="w")
+        last_name_entry = tk.Entry(update_info)
+        last_name_entry.grid(row=3, column=1, padx=5, pady=5, ipady=5)
+        last_name_entry.insert(0, student_data[2])  
+
+        tk.Label(update_info, text="Email:", bg="#F2EEE9", font=("Segoe UI", 12, "normal")).grid(row=4, column=0, padx=20, sticky="w")
+        email_entry = tk.Entry(update_info)
+        email_entry.grid(row=4, column=1, padx=5, pady=5, ipady=5)
+        email_entry.insert(0, student_data[3])  
+
+        tk.Label(update_info, text="Contact Number:", bg="#F2EEE9", font=("Segoe UI", 12, "normal")).grid(row=5, column=0, padx=20, sticky="w")
+        contact_entry = tk.Entry(update_info)
+        contact_entry.grid(row=5, column=1, padx=5, pady=5, ipady=5)
+        contact_entry.insert(0, student_data[4])  
+
+        # Function to update student info in MySQL
+        def update_student():
+            sr_code= sr_code_entry.get()
+            first_name = first_name_entry.get()
+            last_name = last_name_entry.get()
+            email = email_entry.get()
+            contact = contact_entry.get()
+
+            # Ensure no fields are empty
+            if not first_name or not last_name or not email or not contact:
+                messagebox.showerror("Error", "All fields must be filled!")
+                return  
+
+            try:
+                conn = connect_db()
+                cursor = conn.cursor()
+
+                cursor.execute("""
+                    UPDATE Students 
+                    SET srCode=%s, firstName=%s, lastName=%s, email=%s, contactNum=%s
+                    WHERE studentID=%s
+                """, (sr_code, first_name, last_name, email, contact, studentID))
+
+                conn.commit()
+                messagebox.showinfo("Success", "Student info updated successfully!")
+                self.load_students()  # Refresh student list
+                update_info.destroy()
+
+            except mysql.connector.Error as e:
+                messagebox.showerror("Error", f"Failed to update student: {e}")
+
+            finally:
+                conn.close()
+
+        update_button = tk.Button(update_info, text="Update", fg="#F2EEE9", bg="#8B0000", font=("Segoe UI", 12, "bold"), command=update_student)
+        update_button.grid(row=6, column=1, padx=25, pady=10, sticky="e")
+
+    def drop_student(self):
+        # Get selected item from Treeview
+        selected_item = self.tree.focus()
+        if not selected_item:
+            messagebox.showerror("Error", "Please select a student to delete.")
+            return
+
+        student_data = self.tree.item(selected_item, "values")
+        if not student_data:
+            messagebox.showerror("Error", "Invalid selection.")
+            return
+
+        sr_code_value = student_data[0]  # SR Code is the first column
+
+        # Confirmation before deletion
+        confirm = messagebox.askyesno("Confirm Deletion", f"Are you sure you want to delete student with SR Code: {sr_code_value}?")
+        if not confirm:
+            return
+
+        try:
+            conn = connect_db()
+            cursor = conn.cursor()
+
+            # Delete student using SR Code
+            cursor.execute("DELETE FROM Students WHERE srCode=%s", (sr_code_value,))
+            conn.commit()
+
+            messagebox.showinfo("Success", "Student record deleted successfully!")
+            self.load_students()  # Refresh Treeview
+
+        except mysql.connector.Error as e:
+            messagebox.showerror("Error", f"Failed to delete student: {e}")
+
+        finally:
+            conn.close()
 
     def open_attendance(self):
         self.clear_main_content()
@@ -229,6 +381,24 @@ class Admin(tk.Toplevel):
         header_label = tk.Label(self.main_content, text="Attendance Page", 
                                 font=("Georgia", 24, "bold"), bg="#F2EEE9", fg="#8B0000")
         header_label.place(relx=0.5, y=50, anchor="center")
+
+        # Button to Fetch Data
+        filter_button = tk.Button(self.main_content, text="FILTER", font=("Segoe UI", 12, "bold"), bg="#8B0000", fg="white", width=15, height=2, command=self.filter_date)
+        filter_button.place(x=50, y=100, width=80, height=30)
+
+        # Labels & Date Pickers
+        start_label = tk.Label(self.main_content, text="FROM:", font=("Segoe UI", 11, "bold"), fg="#8B0000", bg="#F2EEE9")
+        start_label.place(x=140, y=102)
+        start_date_entry = DateEntry(self.main_content, background='#8B0000', foreground='white',font=("Segoe UI", 12), borderwidth=2)
+        start_date_entry.place(x=195, y=100, width=80, height=30)
+
+        end_label = tk.Label(self.main_content, text="TO:", font=("Segoe UI", 11, "bold"), fg="#8B0000", bg="#F2EEE9")
+        end_label.place(x=285, y=102)
+        end_date_entry = DateEntry(self.main_content, background='#8B0000', foreground='white',font=("Segoe UI", 12), borderwidth=2)
+        end_date_entry.place(x=315, y=100, width=80, height=30)
+
+        reset_button = tk.Button(self.main_content, text="RESET", font=("Segoe UI", 8, "bold"), bg="#8B0000", fg="white", width=15, height=2, command=self.filter_date)
+        reset_button.place(x=400, y=100, width=60, height=30)
 
         # Create a Treeview widget for the table
         columns = ("name", "srCode", "date", "checkInTime", "checkOutTime")
@@ -261,6 +431,7 @@ class Admin(tk.Toplevel):
                 DATE_FORMAT(a.checkOutTime, '%h:%i %p') AS checkOutTime
             FROM attendance a 
             JOIN students s ON a.studentID = s.studentID
+            ORDER BY a.date ASC;
         """)
 
             # Adjust the table name if needed
@@ -292,9 +463,12 @@ class Admin(tk.Toplevel):
         self.tree.configure(yscrollcommand=scrollbar_y.set, xscrollcommand=scrollbar_x.set)
 
        # Use place to position the Treeview and Scrollbars
-        self.tree.place(x=50, y=110, width=800, height=600)
-        scrollbar_y.place(x=850, y=110, height=600)
+        self.tree.place(x=50, y=150, width=800, height=560)
+        scrollbar_y.place(x=850, y=150, height=560)
         scrollbar_x.place(x=50, y=710, width=800)
+
+    def filter_date(self):
+        print("Filter attendance table")
 
     def open_reports(self):
         self.clear_main_content()

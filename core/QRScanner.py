@@ -16,10 +16,9 @@ class QRScanner(tk.Toplevel):
         self.title("QR Scanner")
         self.geometry("1150x750")
         self.configure(bg="#F2EEE9")
-        self.center_window(1150, 750)
+        self.center_window(self, 1150, 750)
 
-        self.last_scan_time = {}  # Track last scan times for each student
-        self.scan_cooldown = 5  # Cooldown time in seconds
+        self.last_scan_time = 0 
 
         self.cap = None  # Webcam object
         self.scanning = False  # Toggle state
@@ -68,12 +67,12 @@ class QRScanner(tk.Toplevel):
         # Bind the window close event to cleanup resources
         self.protocol("WM_DELETE_WINDOW", self.on_close)
 
-    def center_window(self, width, height):
+    def center_window(self, window, width, height):
         screen_width = self.winfo_screenwidth()
         screen_height = self.winfo_screenheight()
         x = (screen_width - width) // 2
         y = (screen_height - height) // 2
-        self.geometry(f"{width}x{height}+{x}+{y}")
+        window.geometry(f"{width}x{height}+{x}+{y}")
 
     def open_home(self):
         self.destroy()
@@ -152,7 +151,7 @@ class QRScanner(tk.Toplevel):
                     self.process_attendance(sr_code, qr_data)
                     
                 # Create the fading wind-like scanning effect
-                self.create_wind_like_scanning_bar(frame)
+            #    self.create_wind_like_scanning_bar(frame)
 
                 img = Image.fromarray(frame)
                 img = img.resize((self.video_label.winfo_width(), self.video_label.winfo_height()), Image.LANCZOS)
@@ -164,10 +163,11 @@ class QRScanner(tk.Toplevel):
                 # Schedule next frame update
                 self.after(10, self.scan_qr_code)  # Fast refresh rate
                 
-    def show_timed_message(self, title, message, duration=2000):  # duration in milliseconds (2000ms = 2 seconds)
+    def show_timed_message(self, title, message, duration=4000):  # duration in milliseconds (2000ms = 2 seconds)
         popup = tk.Toplevel()
         popup.title(title)
         popup.geometry("300x100")  # Adjust size as needed
+        self.center_window(popup, 300, 100)
         label = tk.Label(popup, text=message, padx=20, pady=20)
         label.pack()
         
@@ -175,24 +175,25 @@ class QRScanner(tk.Toplevel):
         popup.after(duration, popup.destroy)
 
     def process_attendance(self, sr_code, qr_data):
+
+        current_time = time.time()
+        seconds = 5
+
+        # Check if last scan was less than 5 seconds ago
+        if current_time - self.last_scan_time < seconds:
+            return  # Ignore scan if cooldown is active
+
+        self.last_scan_time = current_time  # Update last scan time
+        
         db = connect_db()
         cursor = db.cursor()
         cursor.execute("SELECT studentID FROM students WHERE srCode = %s", (sr_code,))
         result = cursor.fetchone()
 
-        current_time = datetime.now()
         if result:
             student_id = result[0]
-            
-
-            # Check last scan time to prevent spam
-            if student_id in self.last_scan_time:
-                time_since_last_scan = (current_time - self.last_scan_time[student_id]).total_seconds()
-                if time_since_last_scan < self.scan_cooldown:
-                    return  # Just ignore the scan without showing a message
-
-            today = current_time.date()
-            current_time_only = current_time.time()
+            today = datetime.now().date()
+            current_time = datetime.now().time()
 
             # Select both attendanceID and checkOutTime
             cursor.execute("SELECT attendanceID, checkOutTime FROM attendance WHERE studentID = %s AND DATE(date) = %s", (student_id, today))
@@ -213,12 +214,8 @@ class QRScanner(tk.Toplevel):
             
             db.commit()
 
-            # Update last scan time for cooldown
-            self.last_scan_time[student_id] = current_time
-
         else: 
-            self.show_timed_message("Error", "Student not found!")
-        self.last_scan_time[sr_code] = current_time  
+            self.show_timed_message("Error", "Student not found!") 
         
         cursor.close()
         db.close()
