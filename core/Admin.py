@@ -389,16 +389,16 @@ class Admin(tk.Toplevel):
         # Labels & Date Pickers
         start_label = tk.Label(self.main_content, text="FROM:", font=("Segoe UI", 11, "bold"), fg="#8B0000", bg="#F2EEE9")
         start_label.place(x=140, y=102)
-        start_date_entry = DateEntry(self.main_content, background='#8B0000', foreground='white',font=("Segoe UI", 12), borderwidth=2)
-        start_date_entry.place(x=195, y=100, width=80, height=30)
+        self.start_date_entry = DateEntry(self.main_content, background='#8B0000', foreground='white',font=("Segoe UI", 12), borderwidth=2)
+        self.start_date_entry.place(x=195, y=100, width=80, height=30)
 
         end_label = tk.Label(self.main_content, text="TO:", font=("Segoe UI", 11, "bold"), fg="#8B0000", bg="#F2EEE9")
         end_label.place(x=285, y=102)
-        end_date_entry = DateEntry(self.main_content, background='#8B0000', foreground='white',font=("Segoe UI", 12), borderwidth=2)
-        end_date_entry.place(x=315, y=100, width=80, height=30)
+        self.end_date_entry = DateEntry(self.main_content, background='#8B0000', foreground='white',font=("Segoe UI", 12), borderwidth=2)
+        self.end_date_entry.place(x=315, y=100, width=80, height=30)
 
-        reset_button = tk.Button(self.main_content, text="RESET", font=("Segoe UI", 8, "bold"), bg="#8B0000", fg="white", width=15, height=2, command=self.filter_date)
-        reset_button.place(x=400, y=100, width=60, height=30)
+        reset_button = tk.Button(self.main_content, text="RESET", font=("Segoe UI", 8, "bold"), bg="#8B0000", fg="white", width=15, height=2, command=self.reset_table)
+        reset_button.place(x=790, y=100, width=60, height=30)
 
         # Create a Treeview widget for the table
         columns = ("name", "srCode", "date", "checkInTime", "checkOutTime")
@@ -468,7 +468,77 @@ class Admin(tk.Toplevel):
         scrollbar_x.place(x=50, y=710, width=800)
 
     def filter_date(self):
-        print("Filter attendance table")
+        # Get the selected dates from the DateEntry fields
+        start_date = self.start_date_entry.get_date()
+        end_date = self.end_date_entry.get_date()
+
+        # Convert to string format suitable for SQL (YYYY-MM-DD)
+        start_date_str = start_date.strftime("%Y-%m-%d")
+        end_date_str = end_date.strftime("%Y-%m-%d")
+
+        try:
+            conn = connect_db()
+            cursor = conn.cursor()
+
+            # SQL query to filter attendance by date range
+            query = """
+            SELECT CONCAT(s.firstName, ' ', s.lastName) AS fullName, 
+                s.srCode, 
+                DATE_FORMAT(a.date, '%M %e, %Y') AS formattedDate,
+                DATE_FORMAT(a.checkInTime, '%h:%i %p') AS checkInTime, 
+                DATE_FORMAT(a.checkOutTime, '%h:%i %p') AS checkOutTime
+            FROM attendance a 
+            JOIN students s ON a.studentID = s.studentID
+            WHERE a.date BETWEEN %s AND %s
+            ORDER BY a.date ASC;
+            """
+
+            cursor.execute(query, (start_date_str, end_date_str))
+            filtered_data = cursor.fetchall()
+
+            # Clear existing data in the table
+            for row in self.tree.get_children():
+                self.tree.delete(row)
+
+            # Insert the filtered data into the Treeview
+            for student in filtered_data:
+                self.tree.insert("", tk.END, values=student)
+
+            cursor.close()
+            conn.close()
+        except mysql.connector.Error as err:
+            print(f"Database error: {err}")
+
+
+    def reset_table(self):
+        try:
+            conn = connect_db()
+            cursor = conn.cursor()
+            cursor.execute("""
+            SELECT CONCAT(s.firstName, ' ', s.lastName) AS fullName, 
+                s.srCode, 
+                DATE_FORMAT(a.date, '%M %e, %Y') AS formattedDate,
+                DATE_FORMAT(a.checkInTime, '%h:%i %p') AS checkInTime, 
+                DATE_FORMAT(a.checkOutTime, '%h:%i %p') AS checkOutTime
+            FROM attendance a 
+            JOIN students s ON a.studentID = s.studentID
+            ORDER BY a.date ASC;
+        """)
+
+            # Adjust the table name if needed
+            students_data = cursor.fetchall()
+            
+            for row in self.tree.get_children():
+                self.tree.delete(row)  # Clear existing rows
+
+            # Insert data into the Treeview
+            for student in students_data:
+                self.tree.insert("", tk.END, values=student)
+
+            cursor.close()
+            conn.close()
+        except mysql.connector.Error as err:
+            print(f"Database error: {err}")
 
     def open_reports(self):
         self.clear_main_content()
