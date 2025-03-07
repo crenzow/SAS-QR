@@ -431,7 +431,7 @@ class Admin(tk.Toplevel):
                 DATE_FORMAT(a.checkOutTime, '%h:%i %p') AS checkOutTime
             FROM attendance a 
             JOIN students s ON a.studentID = s.studentID
-            ORDER BY a.date ASC;
+            ORDER BY a.date ASC, a.checkInTime ASC;
         """)
 
             # Adjust the table name if needed
@@ -490,7 +490,7 @@ class Admin(tk.Toplevel):
             FROM attendance a 
             JOIN students s ON a.studentID = s.studentID
             WHERE a.date BETWEEN %s AND %s
-            ORDER BY a.date ASC;
+            ORDER BY a.date ASC, a.checkInTime ASC;
             """
 
             cursor.execute(query, (start_date_str, end_date_str))
@@ -522,7 +522,7 @@ class Admin(tk.Toplevel):
                 DATE_FORMAT(a.checkOutTime, '%h:%i %p') AS checkOutTime
             FROM attendance a 
             JOIN students s ON a.studentID = s.studentID
-            ORDER BY a.date ASC;
+            ORDER BY a.date ASC, a.checkInTime ASC;
         """)
 
             # Adjust the table name if needed
