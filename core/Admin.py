@@ -19,6 +19,9 @@ import qrcode
 from PIL import Image, ImageTk
 from DatabaseConnection import connect_db
 from tkcalendar import DateEntry
+import pandas as pd
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
 class Admin(tk.Toplevel):
     def __init__(self, parent):
@@ -542,11 +545,82 @@ class Admin(tk.Toplevel):
 
     def open_reports(self):
         self.clear_main_content()
-       # tk.Label(self.main_content, text="Reports Page", bg="#F2EEE9", font=("Segoe UI", 16)).pack(pady=20)
 
+        # Header Label (Fixed)
         header_label = tk.Label(self.main_content, text="Reports Page", 
                                 font=("Georgia", 24, "bold"), bg="#F2EEE9", fg="#8B0000")
-        header_label.place(relx=0.5, y=50, anchor="center")
+        header_label.pack(pady=20)  # Using pack instead of place ensures it shows properly
+
+        # Create a frame for the charts to align them properly
+        chart_frame = tk.Frame(self.main_content, bg="#F2EEE9")
+        chart_frame.pack(pady=10, expand=True)
+
+        # Connect to MySQL
+        conn = connect_db()
+        cursor = conn.cursor()
+
+        # Query for attendance per day of the week
+        query = """
+        SELECT 
+            DAYNAME(date) AS day_of_week, 
+            COUNT(studentID) AS attendance_count
+        FROM attendance
+        GROUP BY day_of_week
+        ORDER BY FIELD(day_of_week, 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday');
+        """
+        cursor.execute(query)
+        data = cursor.fetchall()
+        cursor.close()
+        conn.close()
+
+        # Convert data to Pandas DataFrame
+        df = pd.DataFrame(data, columns=['Day of Week', 'Attendance Count'])
+
+        # 📌 Fix Chart 1: Attendance Trend
+        fig1, ax1 = plt.subplots(figsize=(6, 4))
+        ax1.plot(df['Day of Week'], df['Attendance Count'], marker='o', linestyle='-', color='b', label='Attendance')
+        ax1.set_xlabel("Day of the Week")
+        ax1.set_ylabel("Number of Students")
+        ax1.set_title("Attendance Trend by Day")
+        ax1.legend()
+        ax1.grid(True)
+
+        # Embed Attendance Chart
+        canvas1 = FigureCanvasTkAgg(fig1, master=chart_frame)
+        canvas1.draw()
+        canvas1.get_tk_widget().pack(side=tk.TOP, pady=10)
+
+        # 📌 Fix Chart 2: Top Absentees
+        conn = connect_db()
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT s.firstName, s.lastName, 
+                (SELECT COUNT(DISTINCT date) FROM attendance) - COUNT(a.date) AS total_absences
+            FROM students s
+            LEFT JOIN attendance a ON s.studentID = a.studentID
+            GROUP BY s.studentID
+            ORDER BY total_absences DESC
+            LIMIT 5;
+        """)
+        results = cursor.fetchall()
+        conn.close()
+        names = [f"{row[1]}" for row in results]  
+      #  names = [f"{row[0]} {row[1]}" for row in results]
+        absences = [row[2] for row in results]
+
+        # 📌 Fix Name Cropping: Use horizontal figure + padding
+        fig2, ax2 = plt.subplots(figsize=(7, 5))  # Wider to fit long names
+        ax2.barh(names, absences, color='red')
+        ax2.set_xlabel("Total Absences")
+    #    ax2.set_ylabel("Students")
+        ax2.set_title("Top 5 Absentees")
+        ax2.set_yticklabels(names, fontsize=10)  # Adjust font size to avoid cropping
+        ax2.invert_yaxis()  
+
+        # Embed Absentees Chart
+        canvas2 = FigureCanvasTkAgg(fig2, master=chart_frame)
+        canvas2.draw()
+        canvas2.get_tk_widget().pack(side=tk.TOP, pady=10)
 
     def logout(self):     
         self.destroy()  # Closes the Admin window

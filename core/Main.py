@@ -11,7 +11,7 @@ class Home(tk.Tk):
         self.configure(bg="#8B0000") 
         self.resizable(False, False)
 
-        self.center_window(500,350)
+        self.center_window(500,350)                          
         
         header_frame = tk.Frame(self, bg="#8B0000", height=100)
         header_frame.pack(fill=tk.X)

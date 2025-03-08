@@ -151,7 +151,7 @@ class QRScanner(tk.Toplevel):
                     self.process_attendance(sr_code, qr_data)
                     
                 # Create the fading wind-like scanning effect
-            #    self.create_wind_like_scanning_bar(frame)
+                self.create_wind_like_scanning_bar(frame)
 
                 img = Image.fromarray(frame)
                 img = img.resize((self.video_label.winfo_width(), self.video_label.winfo_height()), Image.LANCZOS)
