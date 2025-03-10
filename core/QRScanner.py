@@ -123,8 +123,8 @@ class QRScanner(tk.Toplevel):
                 del self.logo_label  # Delete the logo label to free up resources
 
             # Initialize webcam
-            self.cap = cv2.VideoCapture(0)
-            self.cap.set(cv2.CAP_PROP_FPS, 15)  # Limit FPS to reduce lag
+            self.cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
+        #    self.cap.set(cv2.CAP_PROP_FPS, 15)  # Limit FPS to reduce lag
             self.scan_qr_code()  # Start scanning QR codes
 
 
@@ -133,6 +133,7 @@ class QRScanner(tk.Toplevel):
         if self.scanning and self.cap:
             ret, frame = self.cap.read()
             if ret:
+                frame = cv2.flip(frame, 1)
                 frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 
                 # QR Code Detection
